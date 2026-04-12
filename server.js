@@ -121,16 +121,11 @@ function emitHands(room) {
 	
   for (const player of room.players) {
 	  if (!player.isJudge){
-		  console.log("emitPlayerhands");
 		  io.to(player.id).emit('hand_updated', {
-		cards: player.hand
+		cards: player.hand,
+		blackcards: player.blackhand
 		});
-	  }else {
-		  console.log("emitJudgeHand");
-		  io.to(player.id).emit('hand_updated', {
-		cards: player.blackhand
-		});
-	  }
+	  } 
   }
 }
 
@@ -147,8 +142,7 @@ function beginChoosingBlack(roomCode) {
   });
   const judge = room.players[room.judgeIndex];
 	if (!judge) return;
-	const blackChoices = getRandomBlackCards(room,5);
-	judge.blackhand = blackChoices
+	judge.blackhand = getRandomBlackCards(room,5);
 	updateJudgeFlags(room);
   io.to(judge.id).emit("your_turn_as_judge", {
       judge_id: judge.id,
@@ -174,9 +168,7 @@ function getRandomBlackCards(room, count = 5) {
       cards.push(cardId);
     }
   }
-	if (room.usedBlackCards.length > 300){
-		room.usedBlackCards = [];
-	}
+
   return cards;
 }
 
@@ -191,9 +183,6 @@ function getRandomWhiteCard(room,player) {
       hand.push(cardId);
       room.usedWhiteCards.push(cardId);
     }
-	if (room.usedWhiteCards.length > 1000){
-		room.usedWhiteCards = [];
-	}
 
   return cardId;
 }
@@ -214,9 +203,6 @@ function getRandomWhiteCards(room, count = 5) {
       room.usedWhiteCards.push(cardId);
     }
   }
-  if (room.usedWhiteCards.length > 1000){
-		room.usedWhiteCards = [];
-	}
 
   return hand;
 }
@@ -336,7 +322,8 @@ io.on('connection', (socket) => {
     });
 
     io.to(socket.id).emit('hand_updated', {
-      cards: rooms[roomCode].players[0].hand
+      cards: rooms[roomCode].players[0].hand,
+	  blackcards: rooms[roomCode].players[0].blackhand
     });
 
     emitLobbyUpdate(roomCode);
@@ -358,18 +345,20 @@ socket.on("request_game_state", () => {
   if (!player) return;
 
   io.to(socket.id).emit("hand_updated", {
-    cards: player.hand || []
+    cards: player.hand || [],
+	blackcards: player.blackhand || []
   });
+  
 
   if (room.state === "choosing_black" && judge?.id === socket.id) {
-    const blackChoices = getRandomBlackCards(room, 5);
+    judge.blackhand = getRandomBlackCards(room, 5);
 
 
 	for (const player of room.players) {
 		if (player.isJudge){
 			io.to(player.id).emit("your_turn_as_judge", {
       judge_id: judge.id,
-      black_choices: blackChoices
+      black_choices: judge.blackhand
     });
 		}else{
 	io.to(player.id).emit("your_turn_as_player");
@@ -416,7 +405,8 @@ socket.on("request_game_state", () => {
     });
 
     io.to(socket.id).emit('hand_updated', {
-      cards: player.hand
+      cards: player.hand,
+	  blackcards: player.blackhand
     });
 
     emitLobbyUpdate(roomCode);
@@ -466,7 +456,6 @@ socket.on("request_game_state", () => {
 	
 	const judge = room.players[room.judgeIndex];
 	if (!judge) return;
-	const blackChoices = getRandomBlackCards(room,5);
     room.submissions = [];
 	updateJudgeFlags(room);
 
@@ -521,11 +510,6 @@ socket.on("request_game_state", () => {
 });
 
   socket.on('ask_card', () => {
-	  if (room.state !== 'answering') {
-    socket.emit('server_error', {
-      message: 'No es momento de solicitar cartas'
-    });
-    return;
 	  const roomData = getRoomBySocket(socket.id);
 	  if (!roomData) return;
 	  const { room, roomCode } = roomData;
