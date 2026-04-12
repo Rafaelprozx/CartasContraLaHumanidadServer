@@ -125,6 +125,11 @@ function emitHands(room) {
 		  io.to(player.id).emit('hand_updated', {
 		cards: player.hand
 		});
+	  }else {
+		  console.log("emitJudgeHand");
+		  io.to(player.id).emit('hand_updated', {
+		cards: player.blackhand
+		});
 	  }
   }
 }
@@ -143,10 +148,11 @@ function beginChoosingBlack(roomCode) {
   const judge = room.players[room.judgeIndex];
 	if (!judge) return;
 	const blackChoices = getRandomBlackCards(room,5);
+	judge.blackhand = blackChoices
 	updateJudgeFlags(room);
   io.to(judge.id).emit("your_turn_as_judge", {
       judge_id: judge.id,
-      black_choices: blackChoices
+      black_choices: judge.blackhand
     });
 }
 
@@ -168,7 +174,9 @@ function getRandomBlackCards(room, count = 5) {
       cards.push(cardId);
     }
   }
-
+	if (room.usedBlackCards.length > 300){
+		room.usedBlackCards = [];
+	}
   return cards;
 }
 
@@ -183,6 +191,9 @@ function getRandomWhiteCard(room,player) {
       hand.push(cardId);
       room.usedWhiteCards.push(cardId);
     }
+	if (room.usedWhiteCards.length > 1000){
+		room.usedWhiteCards = [];
+	}
 
   return cardId;
 }
@@ -203,6 +214,9 @@ function getRandomWhiteCards(room, count = 5) {
       room.usedWhiteCards.push(cardId);
     }
   }
+  if (room.usedWhiteCards.length > 1000){
+		room.usedWhiteCards = [];
+	}
 
   return hand;
 }
@@ -299,6 +313,7 @@ io.on('connection', (socket) => {
           name: data?.name || 'Host',
           score: 0,
           hand: [],
+		  blackhand: [],
 		  isJudge: true
         }
       ]
@@ -386,6 +401,7 @@ socket.on("request_game_state", () => {
       name: data?.name || 'Jugador',
       score: 0,
       hand: [],
+	  blackhand: [],
 	  isJudge: false
     };
 
@@ -505,6 +521,11 @@ socket.on("request_game_state", () => {
 });
 
   socket.on('ask_card', () => {
+	  if (room.state !== 'answering') {
+    socket.emit('server_error', {
+      message: 'No es momento de solicitar cartas'
+    });
+    return;
 	  const roomData = getRoomBySocket(socket.id);
 	  if (!roomData) return;
 	  const { room, roomCode } = roomData;
