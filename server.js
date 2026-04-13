@@ -148,6 +148,9 @@ function beginChoosingBlack(roomCode) {
       judge_id: judge.id,
       black_choices: judge.blackhand
     });
+  io.to(roomCode).emit('game_started', {
+      judge_id: room.players[room.judgeIndex]?.id || null
+    });
 }
 
 function getRandomBlackCards(room, count = 5) {
