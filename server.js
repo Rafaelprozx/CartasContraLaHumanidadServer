@@ -446,8 +446,7 @@ socket.on("request_game_state", () => {
   socket.on('start_game', () => {
     const roomData = getRoomBySocket(socket.id);
     if (!roomData) return;
-	const { room } = roomData;
-	if(room.players.length < 2){
+	if(roomData.players.length < 2){
 		console.log("cannot start server of just one player");
 		socket.emit('server_error', {
         message: 'No se puede iniciar con menos de dos jugadores'
