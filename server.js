@@ -453,6 +453,7 @@ socket.on("request_game_state", () => {
 		socket.emit('server_error', {
         message: 'No se puede iniciar con menos de dos jugadores'
       });
+	  return;
 	}
 	
     if (room.hostId !== socket.id) {
