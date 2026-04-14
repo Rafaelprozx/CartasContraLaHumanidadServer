@@ -123,7 +123,14 @@ function beginChoosingBlack(roomCode) {
   io.to(roomCode).emit('game_started', {
       judge_id: room.players[room.judgeIndex]?.id || null
     });
-  io.to(judge.id).emit('unlock_card_send');
+	for (const player of room.players) {
+		if (player.isJudge){
+		io.to(player.id).emit('unlock_card_send');
+		}else{
+		io.to(player.id).emit('lock_card_send');
+		}
+  }
+  
 }
 
 function getRandomBlackCards(room, count = 5) {
