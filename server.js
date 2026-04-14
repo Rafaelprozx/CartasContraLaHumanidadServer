@@ -21,21 +21,6 @@ const MAX_PLAYERS = 8;
 const MAX_HAND_SIZE = 6;
 const rooms = {};
 
-function loadCards(filePath, prefix) {
-  if (!fs.existsSync(filePath)) return [];
-
-  return fs
-    .readFileSync(filePath, 'utf8')
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map((text, index) => ({
-      id: `${prefix}${String(index + 1).padStart(3, '0')}`,
-      text
-    }));
-	console.log("loadCards");
-}
-
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -57,16 +42,6 @@ function shuffle(array) {
     [clone[i], clone[j]] = [clone[j], clone[i]];
   }
   return clone;
-}
-
-function createDeck(cards) {
-	console.log("createDeck");
-  return shuffle(cards.map(card => card.id));
-}
-
-function drawCard(deck) {
-	console.log("drawCard");
-  return deck.length > 0 ? deck.pop() : null;
 }
 
 function sanitizePlayers(players) {
@@ -118,14 +93,11 @@ function emitRoomList(socket) {
 }
 
 function emitHands(room) {
-	
   for (const player of room.players) {
-	  if (!player.isJudge){
 		  io.to(player.id).emit('hand_updated', {
 		cards: player.hand,
 		blackcards: player.blackhand
 		});
-	  } 
   }
 }
 
@@ -151,6 +123,7 @@ function beginChoosingBlack(roomCode) {
   io.to(roomCode).emit('game_started', {
       judge_id: room.players[room.judgeIndex]?.id || null
     });
+  io.to(judge.id).emit('unlock_card_send');
 }
 
 function getRandomBlackCards(room, count = 5) {
@@ -272,7 +245,7 @@ function maybeShowSubmissions(roomCode) {
   if (!judge) return;
 
   const shuffled = shuffle(room.submissions).map(submission => ({
-    submission_id: submission.id,
+    submission_id: submission.submission_id,
     card_id: submission.card_id
   }));
 
@@ -462,17 +435,11 @@ socket.on("request_game_state", () => {
       });
       return;
     }
-
-    room.state = 'choosing_black';
-	
 	const judge = room.players[room.judgeIndex];
 	if (!judge) return;
     room.submissions = [];
 	updateJudgeFlags(room);
-
-    io.to(roomCode).emit('game_started', {
-      judge_id: room.players[room.judgeIndex]?.id || null
-    });
+	beginChoosingBlack(roomCode);
   });
 
   socket.on('select_black_card', (data) => {
@@ -511,6 +478,12 @@ socket.on("request_game_state", () => {
   
   for (const player of room.players) {
 	io.to(player.id).emit("await_answers");
+	if (player.id !== judge.id){
+		io.to(player.id).emit('unlock_card_send');
+	} else {
+		io.to(player.id).emit('lock_card_send');
+	}
+	
   }
   
   
@@ -534,10 +507,16 @@ socket.on("request_game_state", () => {
 
   socket.on('submit_white_card', (data) => {
   const roomData = getRoomBySocket(socket.id);
-  if (!roomData) return;
+
+	if (!roomData) {
+      return callback?.({
+        ok: false,
+        message: 'No estás en una sala'
+      });
+    }
 
   const { room, roomCode } = roomData;
-
+	
   if (room.state !== 'answering') {
     socket.emit('server_error', {
       message: 'No es momento de responder.'
@@ -558,6 +537,12 @@ socket.on("request_game_state", () => {
   const player = room.players.find(p => p.id === socket.id);
   if (!player) return;
 
+	if (!player) {
+      return callback?.({
+        ok: false,
+        message: 'Jugador no encontrado'
+      });
+    }
 
   const cardId = data?.card_id;
   
@@ -601,6 +586,8 @@ socket.on("request_game_state", () => {
   io.to(roomCode).emit('waiting_submissions', {
     remaining: Math.max(0, expectedAnswers - currentAnswers)
   });
+
+	io.to(player.id).emit('lock_card_send');
 
   // pasar a judging
   if (currentAnswers >= expectedAnswers) {
