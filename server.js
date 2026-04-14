@@ -340,7 +340,7 @@ socket.on("request_game_state", () => {
 		io.to(player.id).emit('unlock_card_send');
 		}else{
 		io.to(player.id).emit('lock_card_send');
-		}
+  }}
 
  if (room.state === "choosing_black" && judge?.id === socket.id) {
   io.to(player.id).emit("your_turn_as_judge", {
