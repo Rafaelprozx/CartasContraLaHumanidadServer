@@ -114,6 +114,7 @@ function beginChoosingBlack(roomCode) {
   });
   const judge = room.players[room.judgeIndex];
 	if (!judge) return;
+	judge.blackhand = []
 	judge.blackhand = getRandomBlackCards(room,5);
 	updateJudgeFlags(room);
   io.to(judge.id).emit("your_turn_as_judge", {
@@ -134,9 +135,7 @@ function beginChoosingBlack(roomCode) {
 }
 
 function getRandomBlackCards(room, count = 5) {
-  if (!room.usedBlackCards) {
-    room.usedBlackCards = [];
-  }
+  if (!room.usedBlackCards) room.usedBlackCards = [];
 
   const cards = [];
 
@@ -149,25 +148,27 @@ function getRandomBlackCards(room, count = 5) {
       !cards.includes(cardId)
     ) {
       cards.push(cardId);
+      room.usedBlackCards.push(cardId); 
     }
   }
 
   return cards;
 }
 
-function getRandomWhiteCard(room,player) {
+function getRandomWhiteCard(room, player) {
+  while (true) {
     const num = Math.floor(Math.random() * 1924);
     const cardId = formatCardId("W", num);
-	const hand = player.hand
+
     if (
       !room.usedWhiteCards.includes(cardId) &&
-      !hand.includes(cardId)
+      !player.hand.includes(cardId)
     ) {
-      hand.push(cardId);
+      player.hand.push(cardId);
       room.usedWhiteCards.push(cardId);
+      return cardId;
     }
-
-  return cardId;
+  }
 }
 
 function getRandomWhiteCards(room, count = 5) {
@@ -190,12 +191,15 @@ function getRandomWhiteCards(room, count = 5) {
   return hand;
 }
 
-function refillHand(player, room, targetSize = 5) {
-  if (!player.hand) {
-    player.hand = [];
-  }
+function refillHand(player, room, targetSize = MAX_HAND_SIZE) {
+  if (!player.hand) player.hand = [];
 
-  player.hand = getRandomWhiteCards(room);
+  const missing = targetSize - player.hand.length;
+
+  if (missing > 0) {
+    const newCards = getRandomWhiteCards(room, missing);
+    player.hand.push(...newCards);
+  }
 }
 
 function formatCardId(prefix, num) {
@@ -333,18 +337,15 @@ socket.on("request_game_state", () => {
   });
   
 
-  if (room.state === "choosing_black" && judge?.id === socket.id) {
-    judge.blackhand = getRandomBlackCards(room, 5);
-
-
+ if (room.state === "choosing_black" && judge?.id === socket.id) {
+  io.to(player.id).emit("your_turn_as_judge", {
+    judge_id: judge.id,
+    black_choices: judge.blackhand || []
+  });
+}
 	for (const player of room.players) {
-		if (player.isJudge){
-			io.to(player.id).emit("your_turn_as_judge", {
-      judge_id: judge.id,
-      black_choices: judge.blackhand
-    });
-		}else{
-	io.to(player.id).emit("your_turn_as_player");
+		if (!player.isJudge){
+			io.to(player.id).emit("your_turn_as_player");
 		}
   }
   }
@@ -515,13 +516,6 @@ socket.on("request_game_state", () => {
   socket.on('submit_white_card', (data) => {
   const roomData = getRoomBySocket(socket.id);
 
-	if (!roomData) {
-      return callback?.({
-        ok: false,
-        message: 'No estás en una sala'
-      });
-    }
-
   const { room, roomCode } = roomData;
 	
   if (room.state !== 'answering') {
@@ -543,13 +537,6 @@ socket.on("request_game_state", () => {
 
   const player = room.players.find(p => p.id === socket.id);
   if (!player) return;
-
-	if (!player) {
-      return callback?.({
-        ok: false,
-        message: 'Jugador no encontrado'
-      });
-    }
 
   const cardId = data?.card_id;
   
