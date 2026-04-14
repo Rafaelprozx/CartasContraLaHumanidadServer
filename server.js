@@ -342,14 +342,15 @@ socket.on("request_game_state", () => {
     judge_id: judge.id,
     black_choices: judge.blackhand || []
   });
-}
-	for (const player of room.players) {
+  for (const player of room.players) {
 		if (!player.isJudge){
 			io.to(player.id).emit("your_turn_as_player");
 		}
   }
   }
 });
+
+	
 
   socket.on('join_room', data => {
     const roomCode = data?.room_code;
